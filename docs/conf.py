@@ -1,0 +1,9 @@
+project = "Eulerian hypervelocity impact"
+author = "eulerian_hypervelocity_impact developers"
+extensions = ["sphinx.ext.mathjax"]
+html_theme = "pydata_sphinx_theme"
+html_static_path = ["_static"]
+html_theme_options = {"navigation_depth": 3}
+numfig = True
+math_numfig = True
+exclude_patterns = ["_build"]

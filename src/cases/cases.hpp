@@ -156,12 +156,14 @@ namespace hvi
             c.one_d = false;
             c.eps   = 1e-4;
             c.level = 4;
-            c.tf    = 609e-6;
+            // output times of Fig. 16 (A, mu = 9.2e10), 17 (B, mu = 1e9), 18 (C, mu = 0)
+            c.times = {36e-6, 106e-6, 320e-6, 609e-6};
             if (mu_override >= 0. && mu_override < 5e9)
             {
-                c.tf = mu_override > 0. ? 710e-6 : 1.03e-3;
+                c.times = mu_override > 0. ? std::vector<double>{35e-6, 140e-6, 420e-6, 710e-6}
+                                           : std::vector<double>{75e-6, 187e-6, 600e-6, 1.03e-3};
             }
-            c.times = {36e-6, 106e-6, 320e-6, 609e-6}; // case A; B: 35, 140, 420, 710; C: 75, 187, 600, 1030 us
+            c.tf = c.times.back();
             c.point = [](const Vec3& x)
             {
                 const bool plate = x[0] > 0.2 && x[0] < 0.3 && x[1] > 0.25 && x[1] < 0.75;

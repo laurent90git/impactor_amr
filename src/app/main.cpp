@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     int ret = 0;
     if (hvi::is_3phase_case(case_name))
     {
-        auto cd = hvi::make_case_3phase(case_name);
+        auto cd = hvi::make_case_3phase(case_name, opt.axis);
         hvi::Model<3, 2> model(cd.mat);
         ret = hvi::run_case<dim>(model, cd, opt);
     }

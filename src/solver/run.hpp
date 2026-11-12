@@ -235,7 +235,13 @@ namespace hvi
             v_ref = std::max(vmax, 100.);
             p_ref = rho_ref * v_ref * 3000.;
         }
-        auto fill_indicator = [&]()
+        double rho_min_init = rho_ref;
+        for (std::size_t l = 0; l < N; ++l)
+        {
+            rho_min_init = std::min(rho_min_init, cd.rho_init[l]);
+        }
+        const double log_rho_range = std::max(std::log(rho_ref / rho_min_init), 1.);
+        auto fill_indicator        = [&]()
         {
             samurai::for_each_cell(mesh,
                                    [&](auto& cell)
@@ -252,7 +258,8 @@ namespace hvi
                                            ap += w.alpha[l] * w.p[l];
                                        }
                                        ind[cell][0] = model.solid_fraction(w.alpha);
-                                       ind[cell][1] = rho / rho_ref;
+                                       // log: the shocks in the air are seen next to the solid/air density jump
+                                       ind[cell][1] = std::log(rho) / log_rho_range;
                                        ind[cell][2] = ap / p_ref;
                                        for (std::size_t d = 0; d < dim; ++d)
                                        {

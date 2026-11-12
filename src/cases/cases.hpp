@@ -196,7 +196,7 @@ namespace hvi
     // -----------------------------------------------------------------------------------------------------------------
     // cases with two solids (phases 0, 1) and air (phase 2)
     // -----------------------------------------------------------------------------------------------------------------
-    inline CaseDef<3> make_case_3phase(const std::string& name)
+    inline CaseDef<3> make_case_3phase(const std::string& name, std::size_t axis = 0)
     {
         using namespace materials;
         CaseDef<3> c;
@@ -218,6 +218,29 @@ namespace hvi
                 return PointState{disc ? 0u : (plate ? 1u : 2u), Vec3{disc ? 1000. : 0., 0., 0.}, 1e5};
             };
         }
+        else if (name == "kanel1d" || name == "spall1d") // Ndanou 2015 sec. 6.2.1 / 6.2.2: Al plate (2 mm, 700 m/s) onto Ti (9.8 mm)
+        {
+            // kanel1d: t = 0.2 us, analytical plateaus in Ndanou 2015 eq. (28)-(29); spall1d: t = 5 us (spall fractures)
+            c.mat      = {aluminium_2015(), titanium_2015(), air()};
+            c.rho_init = {2712., 4527., 1.};
+            c.hi       = {0.017, 0.017, 0.017};
+            c.base     = 0.001;
+            c.eps      = 1e-6;
+            c.level    = 7;
+            c.plastic  = true;
+            c.one_d    = true;
+            c.tf       = name == "kanel1d" ? 0.2e-6 : 5e-6;
+            c.point    = [axis](const Vec3& x)
+            {
+                const double s = x[axis];
+                Vec3 v{};
+                if (s > 0.001 && s < 0.003)
+                {
+                    v[axis] = 700.;
+                }
+                return PointState{(s > 0.001 && s < 0.003) ? 0u : ((s >= 0.003 && s < 0.0128) ? 1u : 2u), v, 1e5};
+            };
+        }
         else
         {
             throw std::invalid_argument("unknown case " + name);
@@ -227,6 +250,6 @@ namespace hvi
 
     inline bool is_3phase_case(const std::string& name)
     {
-        return name == "penetration2015";
+        return name == "penetration2015" || name == "kanel1d" || name == "spall1d";
     }
 } // namespace hvi

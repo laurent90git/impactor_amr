@@ -33,22 +33,32 @@ def log_summary(name):
     return a
 
 
+# run name -> (directory, file prefix). B, the 2012 and the 2015 runs were re-run with the fixes of the night
+# (void opening, vacuum guard, failure safeguard) in out/dbg; A and C ran with the first version in out/prod.
+RUNS = {
+    "A": ("prod", "impact2009_A"),
+    "B": ("dbg", "impact2009_B4"),
+    "C": ("prod", "impact2009_C"),
+    "P": ("dbg", "impact2012_P4"),
+    "N": ("dbg", "penetration2015_N4"),
+}
+
+
 def main():
     os.makedirs(FIG, exist_ok=True)
-    for tag in ("A", "B", "C"):
-        fig(f"impact2009_{tag}_0*.npy", f"impact2009_{tag}.png")
-        fig(f"impact2009_{tag}_0*.npy", f"impact2009_{tag}_rho.png", "rho")
-    fig("impact2009_A_0*.npy", "impact2009_A_level.png", "level")
-    fig("impact2012_plastic_0*.npy", "impact2012.png")
-    fig("impact2012_plastic_0*.npy", "impact2012_rho.png", "rho")
-    fig("impact2012_plastic_0*.npy", "impact2012_alpha.png", "alpha")
-    fig("penetration2015_0*.npy", "penetration2015_rho.png", "rho")
-    fig("penetration2015_0*.npy", "penetration2015_alpha.png", "alpha")
+    for key, (d, pre) in RUNS.items():
+        pat = os.path.join("..", d, pre + "_0*.npy")
+        fig(pat, f"impacts_{key}.png")
+        fig(pat, f"impacts_{key}_rho.png", "rho")
+        if key in ("P", "N"):
+            fig(pat, f"impacts_{key}_alpha.png", "alpha")
+            fig(pat, f"impacts_{key}_vm.png", "vonmises")
+    fig(os.path.join("..", "prod", "impact2009_A_0*.npy"), "impacts_A_level.png", "level")
 
     # conservation table from the logs
     rows = []
-    for name in ("impact2009_A", "impact2009_B", "impact2009_C", "impact2012_plastic", "penetration2015"):
-        a = log_summary(name)
+    for key, (d, name) in RUNS.items():
+        a = log_summary(os.path.join("..", d, name))
         if a is None or a.ndim < 2 or len(a) < 2:
             continue
         nph = a.shape[1] - 10  # columns: step t dt cells masses(N) momentum(3) energy floored yielded

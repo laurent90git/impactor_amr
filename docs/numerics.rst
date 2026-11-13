@@ -84,15 +84,28 @@ Relaxation step
 ``physics/relaxation.hpp``, cell by cell:
 
 1. volume fractions clipped to :math:`[10^{-12}, 1]` and normalised;
-2. slip policy (reset of the solid cobases where :math:`\chi = 0`);
+   **vacuum guard**: the scheme is not positivity-preserving, and in the strongest expansions (corner jets) a cell
+   can be drained to vacuum. If the mixture density falls below :math:`\rho_{floor}` (1e-3 times the lightest
+   initial density) the lightest phase is added up to :math:`\rho_{floor}`, the velocity is capped at 20 km/s and
+   the pressure set to the floor (counted ``vacuum``; mass and energy are not conserved in these cells);
+2. slip policy: reset of the cobasis of each solid whose volume fraction is below :math:`\alpha_{lim}`;
+   **failure safeguard**: the same reset where the elastic strain is extreme, :math:`\operatorname{tr} g > 50`
+   (principal stretch about 7), which only happens in smeared interface cells of jets (counted ``failed``);
 3. plastic relaxation of each solid to the yield surface;
 4. instantaneous pressure relaxation (Saurel et al. [SPB09]_ §3.3): solve
    :math:`\sum_l \alpha_l \frac{p_{0,l} + \gamma_l p_{\infty,l} + (\gamma_l - 1)p}{\gamma_l (p + p_{\infty,l})} = 1`
    by Newton in :math:`p > \max_l(-p_{\infty,l})`, update the volume fractions;
-5. energy reset from the total energy with the mixture stiffened-gas law (Ndanou 2015 eq. 26). Where this pressure is
-   not admissible (gas near vacuum in an opening void), the relaxed pressure of step 4 is kept and the total energy
-   is made consistent with it; such cells are counted (``floored`` in the log). In the 2D impacts this changes the
-   total energy by about 1e-5.
+5. energy reset from the total energy with the mixture stiffened-gas law (Ndanou 2015 eq. 26). In strong expansion
+   the stiff phases (copper) can be drained while keeping their volume fraction: the hydrodynamic energy is then too
+   low for any admissible pressure. **Void opening**: at the floor pressure the volume fractions of the stiff phases
+   are scaled by :math:`k < 1` and the gaseous phases fill the rest, :math:`k` being chosen so that the mixture
+   equation of state matches the total energy exactly (counted ``voided``). Only when this is impossible is the
+   relaxed pressure kept and the total energy changed (counted ``floored``).
+
+The first version of the code (cases A and C of :doc:`impacts`) kept the relaxed pressure in step 5, i.e. it injected
+energy; in case B this produced hot, very light copper with a sound speed of 65 km/s and the time step collapsed.
+The diagnostics printed by the solver when the time step collapses (state of the limiting cell) found the three
+problems fixed by the guards above.
 
 Multiresolution
 ---------------

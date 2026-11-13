@@ -21,7 +21,7 @@ import hvi1d  # noqa: E402
 EXE = os.path.join(ROOT, "build", "hvi1d")
 OUT = os.path.join(ROOT, "out", "doc1d")
 FIG = os.path.join(ROOT, "docs", "_static", "fig")
-C = {"x": 0, "h": 3, "rho": 5, "alpha": 6, "u": 7, "v": 8, "p": 10, "s11": 11, "s12": 13, "a21": 14}
+C = {"x": 0, "h": 3, "rho": 5, "alpha_s": 6, "u": 7, "v": 8, "p": 10, "s11": 11, "s12": 13, "a21": 14}
 
 
 def run(case, tag, *args):
@@ -49,7 +49,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(FIG, exist_ok=True)
     cases = ["advect", "slip-advect", "shear-slab", "double-expansion", "solid-shear-tube", "solid-gas-tube", "impact1d"]
-    keys = ["rho", "alpha", "u", "v", "p", "s11", "s12", "a21"]
+    keys = ["rho", "alpha_s", "u", "v", "p", "s11", "s12", "a21"]
     n = 640  # level 5 on [0, 1]
 
     if not a.skip_runs:

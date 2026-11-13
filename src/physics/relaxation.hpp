@@ -6,8 +6,10 @@
 //        f(p) = sum_l alpha_l (p0_l + gamma_l pinf_l + (gamma_l - 1) p) / (gamma_l (p + pinf_l)) - 1 = 0
 //      and update the volume fractions;
 //   5. energy reset from the total energy (mixture EOS, Ndanou 2015 sec. 5.4). Where the energy-based pressure is
-//      not admissible (gas close to vacuum in an opening void), the relaxed pressure is kept and the total energy is
-//      made consistent with it (counted in `floored`).
+//      not admissible (strong expansion: the stiff phases were drained), a void is opened: at the floor pressure the
+//      volume of the stiff phases is reduced and the gas fills the rest, so that the total energy is kept exactly
+//      (counted in `voided`). Only if that is impossible (no gas phase) is the relaxed pressure kept and the total
+//      energy changed (counted in `floored`).
 #pragma once
 
 #include <algorithm>
@@ -23,6 +25,7 @@ namespace hvi
     {
         std::size_t floored = 0; ///< cells where the relaxed pressure was kept (energy not conserved locally)
         std::size_t yielded = 0; ///< solid cobases relaxed to the yield surface
+        std::size_t voided  = 0; ///< cells where a void was opened to keep the energy (see step 5)
     };
 
     template <class Model, class Plasticity = VonMisesInstantaneous<typename Model::ShearEnergy>>
@@ -32,7 +35,8 @@ namespace hvi
         using cons_t = typename Model::cons_t;
 
         Plasticity plasticity{};
-        bool plastic = true; ///< run-time switch of the plasticity step
+        bool plastic      = true; ///< run-time switch of the plasticity step
+        bool void_opening = true; ///< step 5: open a void rather than inject energy where the pressure is inadmissible
 
         /// u: the conservative state of one cell (any indexable type)
         template <class C>
@@ -78,11 +82,11 @@ namespace hvi
                     }
                 }
             };
-            const double chi0 = model.slip.chi(model.solid_fraction(al));
+            const auto chi0 = model.chi_of(al);
             for (std::size_t s = 0; s < NS; ++s)
             {
                 Mat3 A = get_A(s);
-                if (chi0 == 0.)
+                if (chi0[s] == 0.)
                 {
                     model.slip.reset(A);
                 }
@@ -158,17 +162,59 @@ namespace hvi
             {
                 kin += 0.5 * u[L::mom(i)] * u[L::mom(i)] / rho;
             }
-            const double chi = model.slip.chi(model.solid_fraction(al));
-            if (chi > 0.)
+            const auto chi = model.chi_of(al);
+            for (std::size_t s = 0; s < NS; ++s)
             {
-                for (std::size_t s = 0; s < NS; ++s)
+                using SE = typename Model::ShearEnergy;
+                if (chi[s] > 0.)
                 {
-                    using SE = typename Model::ShearEnergy;
                     ree += u[L::arho(s)] * SE::energy(SE::evaluate(get_A(s)), mat[s]);
                 }
             }
-            const double pe = (u[L::energy] - kin - ree - a_gp) / a_g;
-            const bool bad  = !(pe > pmin + ptol) || !std::isfinite(pe);
+            const double reh_target = u[L::energy] - kin - ree; // hydrodynamic energy available
+            double pe               = (reh_target - a_gp) / a_g;
+            bool bad                = !(pe > pmin + ptol) || !std::isfinite(pe);
+            if (bad && void_opening)
+            {
+                // Not enough energy for an admissible pressure with these volume fractions: the cell is in strong
+                // expansion and its stiff phases (p_inf > pmin) were drained. Open the void: at the floor pressure
+                // p* the stiff phases are compacted (volume fractions scaled by k < 1) and the gaseous ones fill the
+                // rest, so that the mixture EOS matches the total energy exactly.
+                const double ps = pmin + ptol;
+                double as = 0., cs = 0., ag = 0., cg = 0.;
+                for (std::size_t l = 0; l < N; ++l)
+                {
+                    const double c = al[l] * mat[l].rho_eh(ps);
+                    if (mat[l].pinf > pmin)
+                    {
+                        as += al[l];
+                        cs += c;
+                    }
+                    else
+                    {
+                        ag += al[l];
+                        cg += c;
+                    }
+                }
+                if (as > 0. && ag > 0.)
+                {
+                    const double Cg = cg / ag; // energy per unit volume of the gaseous phases at p*
+                    const double k  = (reh_target - Cg) / (cs - as * Cg);
+                    if (std::isfinite(k) && k > 0. && k < 1.)
+                    {
+                        const double m = (1. - k * as) / ag;
+                        for (std::size_t l = 0; l < N; ++l)
+                        {
+                            al[l] *= mat[l].pinf > pmin ? k : m;
+                            al[l] = std::max(al[l], model.alpha_min);
+                            u[L::alpha(l)] = al[l];
+                        }
+                        pe  = ps;
+                        bad = false;
+                        ++stats.voided;
+                    }
+                }
+            }
             const double pf = bad ? p : pe;
             double reh      = 0.;
             for (std::size_t l = 0; l < N; ++l)

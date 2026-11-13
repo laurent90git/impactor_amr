@@ -5,7 +5,7 @@
 //
 // A slip policy decides, cell by cell, whether the solid phases carry shear stress (chi = 1) or not (chi = 0), and
 // what to do with their cobasis where they do not. Interface of a policy:
-//   double chi(double alpha_solid_total) const;        // 1: solid behaviour, 0: fluid behaviour
+//   double chi(double alpha_s) const;                  // per solid phase s: 1 solid behaviour, 0 fluid behaviour
 //   void reset(Mat3& A) const;                         // applied to each solid cobasis where chi = 0
 //
 // With chi = 0 the shear stress, the shear energy and the shear impedance of the cell vanish. Combined with the shear
@@ -25,7 +25,7 @@ namespace hvi
     {
         double alpha_lim = 1e-2;
 
-        [[nodiscard]] double chi(double alpha_solid) const
+        [[nodiscard]] double chi(double alpha_solid) const // volume fraction of the solid phase
         {
             return alpha_solid >= alpha_lim ? 1. : 0.;
         }

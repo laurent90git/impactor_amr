@@ -116,7 +116,7 @@ namespace hvi
                                        // unstrained: g = I whatever the density; A = (rho/rho0)^(1/3) I
                                        w.A[s] = std::cbrt(w.rho[s] / model.mat[s].rho0) * identity3();
                                    }
-                                   w.chi        = model.slip.chi(model.solid_fraction(w.alpha));
+                                   w.chi        = model.chi_of(w.alpha);
                                    const auto c = model.to_cons(w);
                                    for (std::size_t q = 0; q < Model::nc; ++q)
                                    {
@@ -335,7 +335,7 @@ namespace hvi
                                        }
                                        for (double v : {x[0], x[1], x[2], static_cast<double>(cell.length), static_cast<double>(cell.level), mx.rho,
                                                         model.solid_fraction(w.alpha), w.v[0], w.v[1], w.v[2], ap, mx.sigma[0][0],
-                                                        mx.sigma[1][1], mx.sigma[0][1], a21, w.chi, vm, mx.sigma[2][2], mx.sigma[0][2],
+                                                        mx.sigma[1][1], mx.sigma[0][1], a21, NS > 0 ? w.chi[0] : 0., vm, mx.sigma[2][2], mx.sigma[0][2],
                                                         mx.sigma[1][2]})
                                        {
                                            a.push_back(v);
@@ -388,6 +388,7 @@ namespace hvi
             output(0.);
         }
         RelaxationStats stats;
+        double smax0 = 1.;
         while (t < tf * (1. - 1e-12) && nt < opt.max_steps)
         {
             if (adaptive)
@@ -395,20 +396,50 @@ namespace hvi
                 adapt();
                 const auto s = relax_all(U, model, relaxation);
                 stats.floored += s.floored;
+                stats.voided += s.voided;
             }
             double smax = 0.;
             bool finite = true;
+            typename Model::prim_t wmax;
+            Vec3 xmax{};
             samurai::for_each_cell(mesh,
                                    [&](auto& cell)
                                    {
                                        const auto w = model.to_prim(get_cons<decltype(U), Model>(U, cell));
                                        const double s = model.template cfl_speed<dim>(w);
                                        finite         = finite && std::isfinite(s);
-                                       smax           = std::max(smax, s);
+                                       if (s > smax)
+                                       {
+                                           smax = s;
+                                           wmax = w;
+                                           for (std::size_t d = 0; d < dim; ++d)
+                                           {
+                                               xmax[d] = cell.center(d);
+                                           }
+                                       }
                                    });
-            if (!finite)
+            if (nt == 0)
             {
-                std::cerr << fmt::format("non-finite state at step {}, t = {:.6e}: stop", nt, t) << std::endl;
+                smax0 = smax;
+            }
+            if (!finite || smax > 1e3 * smax0)
+            {
+                // the time step collapsed: report the cell that limits it
+                std::cerr << fmt::format("{} at step {}, t = {:.6e}: max speed {:.4e} (initial {:.4e}) at ({:.5f}, {:.5f}, {:.5f})",
+                                         finite ? "time step collapse" : "non-finite state", nt, t, smax, smax0, xmax[0], xmax[1], xmax[2])
+                          << std::endl;
+                for (std::size_t l = 0; l < N; ++l)
+                {
+                    std::cerr << fmt::format("  phase {}: alpha {:.6e} rho {:.6e} p {:.6e}", l, wmax.alpha[l], wmax.rho[l], wmax.p[l]) << std::endl;
+                }
+                std::cerr << fmt::format("  v ({:.4e}, {:.4e}, {:.4e}) chi {}", wmax.v[0], wmax.v[1], wmax.v[2], NS > 0 ? wmax.chi[0] : 0.) << std::endl;
+                for (std::size_t s = 0; s < NS; ++s)
+                {
+                    const auto& A = wmax.A[s];
+                    std::cerr << fmt::format("  A[{}] = [[{:.4e} {:.4e} {:.4e}] [{:.4e} {:.4e} {:.4e}] [{:.4e} {:.4e} {:.4e}]] det {:.4e}", s, A[0][0],
+                                             A[0][1], A[0][2], A[1][0], A[1][1], A[1][2], A[2][0], A[2][1], A[2][2], det(A))
+                              << std::endl;
+                }
                 output(t);
                 return 1;
             }
@@ -433,19 +464,21 @@ namespace hvi
                 st      = relax_all(Unp1, model, relaxation);
                 st.floored += s1.floored;
                 st.yielded += s1.yielded;
+                st.voided += s1.voided;
             }
             samurai::swap(U, Unp1);
             t += dt;
             ++nt;
             stats.floored += st.floored;
+            stats.voided += st.voided;
             stats.yielded = st.yielded;
             const bool is_out = next_out < out_times.size() && t >= out_times[next_out] * (1. - 1e-12);
             if (nt % opt.log_every == 0 || is_out || nt == 1)
             {
                 const auto s     = diagnostics(nt, t, dt, stats);
                 const double wct = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall0).count();
-                std::cout << fmt::format("step {:7d} t = {:.4e} dt = {:.3e} cells {:8d} floored {:6d} yielded {:6d}  ({:.0f} s)", nt, t, dt,
-                                         mesh.nb_cells(mesh_id_t::cells), stats.floored, st.yielded, wct)
+                std::cout << fmt::format("step {:7d} t = {:.4e} dt = {:.3e} cells {:8d} floored {:6d} voided {:7d} yielded {:6d}  ({:.0f} s)", nt,
+                                         t, dt, mesh.nb_cells(mesh_id_t::cells), stats.floored, stats.voided, st.yielded, wct)
                           << std::endl;
                 log.flush();
             }

@@ -33,8 +33,8 @@ non-conservative contributions, boundary conditions, time integration):
 .. figure:: _static/fig/ladder_impact1d.png
    :width: 100%
 
-   Copper slab at 800 m/s on a copper slab at rest, in air: contact at 400 m/s, then release from the free surfaces
-   and void opening in the projectile.
+   Copper slab at 800 m/s on a copper slab at rest, in air: contact at 400 m/s, then release waves from the free
+   surfaces.
 
 Slip at a solid/air interface
 -----------------------------
@@ -61,8 +61,9 @@ Shear waves in a slab with free surfaces
    Favrie 2009 §6.2 (times corrected to 54.6 and 180 µs): copper slab [0.15, 0.85] m in air, transverse velocity
    1000 m/s in [0.35, 0.65]. Top: before the reflections the shear waves agree with linear elasticity (red); the
    15 % shear produces a normal stress effect (longitudinal waves, pressure). Bottom: after the reflections at the
-   free surfaces. The air stays at rest; at this amplitude the nonlinear response of the model differs from the
-   linear-looking curves of the paper's Fig. 14.
+   free surfaces. At this amplitude the nonlinear response of the model differs from the linear-looking curves of the
+   paper's Fig. 14. The spikes of transverse velocity at x = 0.13 and 0.87 m are thin layers of copper torn from the
+   sheared free surfaces (fluidised cells, about 0.4 kg/m²): the main artefact of the slip treatment.
 
 Elastic-plastic waves: comparison with analytical values
 --------------------------------------------------------
@@ -96,5 +97,7 @@ Spallation
 .. figure:: _static/fig/spall1d.png
    :width: 100%
 
-   Ndanou 2015 §6.2.2: same impact, density up to 5 µs. The rarefactions from the two free surfaces cross in the
-   titanium and open spall fractures (void opening of the residual air).
+   Ndanou 2015 §6.2.2: same impact, density at 1, 2, 3, 4, 5 µs (multiresolution, levels 4 to 10, finest cell 1 µm).
+   The rarefactions from the two free surfaces cross in the titanium and open several spall fractures near its free
+   surface (void opening of the residual air), as in Fig. 12 of the paper (three fractures for Y = 1030 MPa). Voids
+   also open at the rear of the aluminium impactor.

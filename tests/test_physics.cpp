@@ -38,7 +38,7 @@ int main()
     w.p     = {2e8, 2e8};
     w.v     = {100., -20., 5.};
     w.A[0]  = {{{1.01, 0.02, 0.}, {-0.03, 0.99, 0.01}, {0., 0., 1.}}};
-    w.chi   = 1.;
+    w.chi   = {1.};
     const auto u  = model.to_cons(w);
     const auto w2 = model.to_prim(u);
     check(close(w2.p[0], w.p[0], 1e-10) && close(w2.p[1], w.p[1], 1e-10), "round trip pressures", w2.p[0], w.p[0]);

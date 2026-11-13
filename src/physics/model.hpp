@@ -50,7 +50,7 @@ namespace hvi
         std::array<double, N> alpha{}, rho{}, p{};
         Vec3 v{};
         std::array<Mat3, NS> A{};
-        double chi = 1.; ///< solid strength switch of the slip policy (never reconstructed)
+        std::array<double, NS> chi{}; ///< strength switch of each solid (slip policy), never reconstructed
     };
 
     /// Mixture quantities derived from a primitive state, for one direction d.
@@ -100,6 +100,18 @@ namespace hvi
         // -------------------------------------------------------------------------------------------------------------
         // conversions
         // -------------------------------------------------------------------------------------------------------------
+        /// strength switch of each solid phase: a solid carries shear stress only where its own volume fraction is
+        /// above the threshold of the slip policy (residual solids inside other materials have no strength)
+        [[nodiscard]] std::array<double, NS> chi_of(const std::array<double, N>& alpha) const
+        {
+            std::array<double, NS> c{};
+            for (std::size_t s = 0; s < NS; ++s)
+            {
+                c[s] = slip.chi(alpha[s]);
+            }
+            return c;
+        }
+
         [[nodiscard]] double solid_fraction(const std::array<double, N>& alpha) const
         {
             double a = 0.;
@@ -146,7 +158,7 @@ namespace hvi
                     }
                 }
             }
-            w.chi = slip.chi(solid_fraction(w.alpha));
+            w.chi = chi_of(w.alpha);
             return w;
         }
 
@@ -186,7 +198,7 @@ namespace hvi
         /// specific shear energy of solid s (0 where chi = 0)
         [[nodiscard]] double shear_energy(const prim_t& w, std::size_t s) const
         {
-            if (w.chi == 0.)
+            if (w.chi[s] == 0.)
             {
                 return 0.;
             }
@@ -215,15 +227,17 @@ namespace hvi
                 kin += w.v[i] * w.v[i];
             }
             K[d][d] = cf2;
-            if (w.chi > 0.)
+            double chimax = 0.;
+            for (std::size_t s = 0; s < NS; ++s)
             {
-                for (std::size_t s = 0; s < NS; ++s)
+                chimax = std::max(chimax, w.chi[s]);
+                if (w.chi[s] > 0.)
                 {
                     const double ar = w.alpha[s] * w.rho[s];
                     const auto es   = ShearEnergy::evaluate(w.A[s]);
-                    m.sigma += (w.chi * w.alpha[s]) * ShearEnergy::deviator(es, mat[s], w.rho[s]);
-                    ree += w.chi * ar * ShearEnergy::energy(es, mat[s]);
-                    K += (w.chi * ar / m.rho) * ShearEnergy::acoustic(es, mat[s], d);
+                    m.sigma += (w.chi[s] * w.alpha[s]) * ShearEnergy::deviator(es, mat[s], w.rho[s]);
+                    ree += w.chi[s] * ar * ShearEnergy::energy(es, mat[s]);
+                    K += (w.chi[s] * ar / m.rho) * ShearEnergy::acoustic(es, mat[s], d);
                 }
             }
             m.rhoE = reh + ree + 0.5 * m.rho * kin;
@@ -234,7 +248,7 @@ namespace hvi
                 lmax = std::max(lmax, std::abs(K[i][0]) + std::abs(K[i][1]) + std::abs(K[i][2]));
             }
             m.cl = std::sqrt(lmax);
-            if (w.chi > 0.)
+            if (chimax > 0.)
             {
                 const std::size_t t1 = (d + 1) % 3, t2 = (d + 2) % 3;
                 m.ct                 = std::sqrt(std::max(std::max(K[t1][t1], K[t2][t2]) + std::abs(K[t1][t2]), 0.));

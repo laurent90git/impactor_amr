@@ -21,3 +21,10 @@ Resume point for any restart: read this file, then DEVELOPMENT_PLAN.md.
 ## Next
 - 2D figures for docs/impacts.rst from out/prod (scripts/schlieren.py), compare with the papers' figures.
 - If a run fails: look at out/prod/<X>.txt, rerun that line of run_production.sh.
+
+## Night, ~02:00: time-step collapse in B, impact2012, penetration2015 (fixed in source, being re-run)
+- Diagnosis (case B at 67.8 us): copper cell at alpha = 1 drained to rho = 34 kg/m3 at p = 0, air crushed; the energy
+  floor injected energy -> hot light copper with c = 65 km/s -> dt -> 0.
+- Fix: relaxation step 5 opens a void (compacts the stiff phases, gas fills) instead of injecting energy (`voided`
+  counter). Also: slip switch per solid phase (needed with 2 solids). 1D results unchanged.
+- Runs A and C (old binary in build/) continue; B and 2012 re-run with build-dev/hvi2d into out/dbg.

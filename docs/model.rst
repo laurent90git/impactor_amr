@@ -71,14 +71,14 @@ infinite below it.
 
 The state vector of a cell, for N phases of which the first NS are solids, is
 
-=========================  ==========  =====================================
-:math:`\alpha_l`           N           non-conservative
-:math:`\alpha_l \rho_l`    N           conservative
-:math:`\rho v`             3           conservative (always 3 components)
-:math:`\rho E`             1           conservative
-:math:`\alpha_l\rho_l e_l` N           non-conservative
-:math:`A_s`                9 NS        non-conservative
-=========================  ==========  =====================================
+==============================  ==========  =====================================
+:math:`\alpha_l`                N           non-conservative
+:math:`\alpha_l \rho_l`         N           conservative
+:math:`\rho v`                  3           conservative (always 3 components)
+:math:`\rho E`                  1           conservative
+:math:`\alpha_l\rho_l e_l`      N           non-conservative
+:math:`A_s`                     9 NS        non-conservative
+==============================  ==========  =====================================
 
 so 19 components for one solid and air, 31 for two solids and air (``physics/model.hpp``, ``Layout``).
 
@@ -132,7 +132,8 @@ Slip at solid/fluid interfaces
 
 With residual fractions, the "fluid" side of an interface contains some solid, which has a shear stiffness: without
 treatment the solid drags the fluid (no slip) and sends shear waves into it. Favrie et al. correct this with a
-level-set and a ghost-fluid treatment of the tangential velocity [FGS09]_ §5.6–6, [FG12]_ §5.2. This code uses a
+level-set and a ghost-fluid treatment of the tangential velocity [FGS09]_ §5.6–6, [FG12]_ §5.2; Wallis et al.
+[WBN21]_ use flux modifiers. This code uses a
 local rule instead (``physics/slip.hpp``, policy ``Fluidisation``):
 
 .. math::

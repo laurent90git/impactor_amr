@@ -53,6 +53,11 @@ tension behind the release waves opens voids everywhere in the soft material.
 bends into a crescent and sheds filaments backwards that leave the domain. The schlieren also shows structures in
 the copper-laden air.
 
+.. figure:: _static/fig/impacts_C_rho.png
+   :width: 100%
+
+   Density at 75, 187, 600 and 1030 µs (level 5).
+
 .. image:: _static/gif/impact2009_C.gif
    :width: 100%
 

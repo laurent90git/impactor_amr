@@ -1,5 +1,6 @@
 // Cell-local relaxation step, applied after each stage of the hyperbolic update (and after mesh adaptation):
-//   1. sanitise: volume fractions clipped and normalised;
+//   1. sanitise: volume fractions clipped and normalised; vacuum guard (density floor, velocity cap; counted in
+//      `vacuum`: these cells do not conserve mass and energy);
 //   2. slip policy: where chi = 0, each solid cobasis is reset (slip.hpp);
 //   3. plasticity: each solid cobasis relaxed to the yield surface (plasticity.hpp);
 //   4. instantaneous pressure relaxation (Saurel et al. 2009 sec. 3.3, Ndanou 2015 sec. 5.3): solve for p
@@ -26,6 +27,7 @@ namespace hvi
         std::size_t floored = 0; ///< cells where the relaxed pressure was kept (energy not conserved locally)
         std::size_t yielded = 0; ///< solid cobases relaxed to the yield surface
         std::size_t voided  = 0; ///< cells where a void was opened to keep the energy (see step 5)
+        std::size_t vacuum  = 0; ///< cells refilled by the vacuum guard (step 1b; mass and energy not conserved)
     };
 
     template <class Model, class Plasticity = VonMisesInstantaneous<typename Model::ShearEnergy>>
@@ -37,6 +39,8 @@ namespace hvi
         Plasticity plasticity{};
         bool plastic      = true; ///< run-time switch of the plasticity step
         bool void_opening = true; ///< step 5: open a void rather than inject energy where the pressure is inadmissible
+        double rho_floor  = 1e-3; ///< step 1b: density floor [kg/m3]
+        double v_cap      = 2e4;  ///< step 1b: velocity cap [m/s]
 
         /// u: the conservative state of one cell (any indexable type)
         template <class C>
@@ -57,6 +61,61 @@ namespace hvi
             for (auto& a : al)
             {
                 a /= sa;
+            }
+
+            // 1b. vacuum guard: the scheme is not positivity-preserving; a cell drained to (near) vacuum is refilled
+            // with its lightest phase up to rho_floor, its velocity capped, its pressure set to the floor pressure.
+            {
+                double rho = 0.;
+                for (std::size_t l = 0; l < N; ++l)
+                {
+                    rho += u[L::arho(l)];
+                }
+                double v2 = 0.;
+                for (std::size_t i = 0; i < 3; ++i)
+                {
+                    v2 += sq(u[L::mom(i)] / rho);
+                }
+                if (rho < rho_floor || v2 > v_cap * v_cap)
+                {
+                    std::size_t lg = 0; // lightest phase: lowest p_inf
+                    for (std::size_t l = 1; l < N; ++l)
+                    {
+                        if (mat[l].pinf < mat[lg].pinf)
+                        {
+                            lg = l;
+                        }
+                    }
+                    if (rho < rho_floor)
+                    {
+                        u[L::arho(lg)] += rho_floor - rho;
+                        rho = rho_floor;
+                    }
+                    const double vn = std::sqrt(v2);
+                    const double f  = vn > v_cap ? v_cap / vn : 1.;
+                    for (std::size_t i = 0; i < 3; ++i)
+                    {
+                        u[L::mom(i)] *= f;
+                    }
+                    // floor pressure in every phase; the total energy is recomputed in step 5 (bad branch)
+                    double pfl = -1e300;
+                    for (std::size_t l = 0; l < N; ++l)
+                    {
+                        pfl = std::max(pfl, mat[l].pmin());
+                    }
+                    double reh = 0., kin = 0.;
+                    for (std::size_t l = 0; l < N; ++l)
+                    {
+                        u[L::arhoe(l)] = al[l] * mat[l].rho_eh(pfl + 1e-9 * (1. + std::abs(pfl)));
+                        reh += u[L::arhoe(l)];
+                    }
+                    for (std::size_t i = 0; i < 3; ++i)
+                    {
+                        kin += 0.5 * sq(u[L::mom(i)]) / rho;
+                    }
+                    u[L::energy] = reh + kin; // shear energy added back in step 5 if the solid has strength
+                    ++stats.vacuum;
+                }
             }
 
             // 2 - 3. slip policy, plasticity

@@ -160,6 +160,11 @@ namespace hvi
         model.slip.alpha_lim    = opt.alim >= 0. ? opt.alim : cd.alim;
         CellRelaxation<Model> relaxation;
         relaxation.plastic = opt.plastic < 0 ? cd.plastic : opt.plastic == 1;
+        relaxation.rho_floor = 1e300;
+        for (std::size_t l = 0; l < N; ++l)
+        {
+            relaxation.rho_floor = std::min(relaxation.rho_floor, 1e-3 * cd.rho_init[l]);
+        }
         MusclPrimitive<Model> recon;
         recon.limiter       = limiter_from_string(opt.limiter);
         recon.reconstruct_A = opt.muscl_A;
@@ -397,6 +402,7 @@ namespace hvi
                 const auto s = relax_all(U, model, relaxation);
                 stats.floored += s.floored;
                 stats.voided += s.voided;
+                stats.vacuum += s.vacuum;
             }
             double smax = 0.;
             bool finite = true;
@@ -465,20 +471,22 @@ namespace hvi
                 st.floored += s1.floored;
                 st.yielded += s1.yielded;
                 st.voided += s1.voided;
+                st.vacuum += s1.vacuum;
             }
             samurai::swap(U, Unp1);
             t += dt;
             ++nt;
             stats.floored += st.floored;
             stats.voided += st.voided;
+            stats.vacuum += st.vacuum;
             stats.yielded = st.yielded;
             const bool is_out = next_out < out_times.size() && t >= out_times[next_out] * (1. - 1e-12);
             if (nt % opt.log_every == 0 || is_out || nt == 1)
             {
                 const auto s     = diagnostics(nt, t, dt, stats);
                 const double wct = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall0).count();
-                std::cout << fmt::format("step {:7d} t = {:.4e} dt = {:.3e} cells {:8d} floored {:6d} voided {:7d} yielded {:6d}  ({:.0f} s)", nt,
-                                         t, dt, mesh.nb_cells(mesh_id_t::cells), stats.floored, stats.voided, st.yielded, wct)
+                std::cout << fmt::format("step {:7d} t = {:.4e} dt = {:.3e} cells {:8d} floored {:6d} voided {:7d} vacuum {:5d} yielded {:6d}  ({:.0f} s)",
+                                         nt, t, dt, mesh.nb_cells(mesh_id_t::cells), stats.floored, stats.voided, stats.vacuum, st.yielded, wct)
                           << std::endl;
                 log.flush();
             }

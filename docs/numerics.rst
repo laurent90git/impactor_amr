@@ -87,7 +87,9 @@ Relaxation step
    **vacuum guard**: the scheme is not positivity-preserving, and in the strongest expansions (corner jets) a cell
    can be drained to vacuum. If the mixture density falls below :math:`\rho_{floor}` (1e-3 times the lightest
    initial density) the lightest phase is added up to :math:`\rho_{floor}`, the velocity is capped at 20 km/s and
-   the pressure set to the floor (counted ``vacuum``; mass and energy are not conserved in these cells);
+   the pressure set to the floor (counted ``vacuum``; mass and energy are not conserved in these cells). The same
+   reset is applied when a stiff phase is drained below 1e-3 of its reference density while keeping its volume
+   fraction (its volume goes to the gas): its stiffened-gas sound speed would otherwise diverge;
 2. slip policy: reset of the cobasis of each solid whose volume fraction is below :math:`\alpha_{lim}`;
    **failure safeguard**: the same reset where the elastic strain is extreme, :math:`\operatorname{tr} g > 50`
    (principal stretch about 7), which only happens in smeared interface cells of jets (counted ``failed``);

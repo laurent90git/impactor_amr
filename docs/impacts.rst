@@ -81,6 +81,13 @@ appear dynamically where the release waves put the copper in tension (void openi
 
    Copper volume fraction: the voids are the cracks.
 
+.. figure:: _static/fig/impacts_P5_rho.png
+   :width: 100%
+
+   Level 5 (finest cell 1.6 mm), density at 83, 280 and 495 µs, and the level-4 run at 1.1 ms: the radial cracks are
+   sharper at the finer level, the fracture pattern is the same. (The level-5 run stopped at 912 µs on a drained-phase
+   cell, before the guard of :doc:`numerics` step 1b was extended to such cells.)
+
 .. image:: _static/gif/impact2012_P.gif
    :width: 100%
 

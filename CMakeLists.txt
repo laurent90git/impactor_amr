@@ -21,3 +21,5 @@ add_executable(test_physics tests/test_physics.cpp)
 target_include_directories(test_physics PRIVATE src)
 enable_testing()
 add_test(NAME physics COMMAND test_physics)
+
+# OpenMP build: cmake -S . -B build-omp -DCMAKE_PREFIX_PATH=$CONDA_PREFIX -DSAMURAI_WITH_OPENMP=ON

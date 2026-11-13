@@ -18,6 +18,10 @@
 
 #include <fmt/format.h>
 
+#ifdef SAMURAI_WITH_OPENMP
+#include <omp.h>
+#endif
+
 #include <samurai/mr/adapt.hpp>
 #include <samurai/mr/mesh.hpp>
 #include <samurai/samurai.hpp>
@@ -55,6 +59,7 @@ namespace hvi
         std::size_t max_steps = 100000000;
         double checkpoint_every = 900.;  ///< wall seconds between checkpoints (<= 0: none, except on SIGTERM/SIGINT)
         std::string resume;              ///< checkpoint prefix to resume from (<out>/<case>[_<tag>]_ckpt)
+        double base = -1.;               ///< cell size at level 0 (< 0: the case's; must divide the domain lengths)
     };
 
     /// set by SIGTERM / SIGINT: the time loop writes a checkpoint and stops
@@ -97,6 +102,28 @@ namespace hvi
             }
         }
     };
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // shared-memory parallelism (OpenMP, when samurai is built with SAMURAI_WITH_OPENMP): the cell loops below run on
+    // all threads; samurai's flux loops are parallel by themselves.
+    // ---------------------------------------------------------------------------------------------------------------
+    inline int n_threads()
+    {
+#ifdef SAMURAI_WITH_OPENMP
+        return omp_get_max_threads();
+#else
+        return 1;
+#endif
+    }
+
+    inline int thread_id()
+    {
+#ifdef SAMURAI_WITH_OPENMP
+        return omp_get_thread_num();
+#else
+        return 0;
+#endif
+    }
 
     // ---------------------------------------------------------------------------------------------------------------
     // cell-wise helpers
@@ -174,18 +201,27 @@ namespace hvi
     template <class Model, class Relaxation, class Field>
     RelaxationStats relax_all(Field& U, const Model& model, const Relaxation& relax)
     {
-        RelaxationStats st;
-        samurai::for_each_cell(U.mesh(),
-                               [&](auto& cell)
-                               {
-                                   auto c = get_cons<Field, Model>(U, cell);
-                                   relax(model, c, st);
-                                   for (std::size_t q = 0; q < Model::nc; ++q)
-                                   {
-                                       U[cell][q] = c[q];
-                                   }
-                               });
+        std::vector<RelaxationStats> per_thread(static_cast<std::size_t>(n_threads()));
+        samurai::for_each_cell<samurai::Run::Parallel>(U.mesh(),
+                                                       [&](auto& cell)
+                                                       {
+                                                           auto c = get_cons<Field, Model>(U, cell);
+                                                           relax(model, c, per_thread[static_cast<std::size_t>(thread_id())]);
+                                                           for (std::size_t q = 0; q < Model::nc; ++q)
+                                                           {
+                                                               U[cell][q] = c[q];
+                                                           }
+                                                       });
         U.ghosts_updated() = false;
+        RelaxationStats st;
+        for (const auto& p : per_thread)
+        {
+            st.floored += p.floored;
+            st.yielded += p.yielded;
+            st.voided += p.voided;
+            st.vacuum += p.vacuum;
+            st.failed += p.failed;
+        }
         return st;
     }
 
@@ -203,6 +239,10 @@ namespace hvi
         const std::size_t lmin  = (opt.min_level > 0 && opt.min_level < level) ? opt.min_level : level;
         const double tf         = opt.tf > 0. ? opt.tf : cd.tf;
         const double eps        = opt.eps > 0. ? opt.eps : cd.eps;
+        if (opt.base > 0.)
+        {
+            cd.base = opt.base;
+        }
         model.slip.alpha_lim    = opt.alim >= 0. ? opt.alim : cd.alim;
         CellRelaxation<Model> relaxation;
         relaxation.plastic = opt.plastic < 0 ? cd.plastic : opt.plastic == 1;
@@ -495,26 +535,46 @@ namespace hvi
                 stats.vacuum += s.vacuum;
                 stats.failed += s.failed;
             }
+            // largest wave speed (per-thread maxima, then reduced), and the cell where it is reached
+            struct MaxSpeed
+            {
+                double s    = 0.;
+                bool finite = true;
+                typename Model::prim_t w;
+                Vec3 x{};
+            };
+            std::vector<MaxSpeed> tmax(static_cast<std::size_t>(n_threads()));
+            samurai::for_each_cell<samurai::Run::Parallel>(mesh,
+                                                           [&](auto& cell)
+                                                           {
+                                                               auto& m        = tmax[static_cast<std::size_t>(thread_id())];
+                                                               const auto w   = model.to_prim(get_cons<decltype(U), Model>(U, cell));
+                                                               const double s = model.template cfl_speed<dim>(w);
+                                                               m.finite       = m.finite && std::isfinite(s);
+                                                               if (s > m.s)
+                                                               {
+                                                                   m.s = s;
+                                                                   m.w = w;
+                                                                   for (std::size_t d = 0; d < dim; ++d)
+                                                                   {
+                                                                       m.x[d] = cell.center(d);
+                                                                   }
+                                                               }
+                                                           });
             double smax = 0.;
             bool finite = true;
             typename Model::prim_t wmax;
             Vec3 xmax{};
-            samurai::for_each_cell(mesh,
-                                   [&](auto& cell)
-                                   {
-                                       const auto w = model.to_prim(get_cons<decltype(U), Model>(U, cell));
-                                       const double s = model.template cfl_speed<dim>(w);
-                                       finite         = finite && std::isfinite(s);
-                                       if (s > smax)
-                                       {
-                                           smax = s;
-                                           wmax = w;
-                                           for (std::size_t d = 0; d < dim; ++d)
-                                           {
-                                               xmax[d] = cell.center(d);
-                                           }
-                                       }
-                                   });
+            for (const auto& m : tmax)
+            {
+                finite = finite && m.finite;
+                if (m.s > smax)
+                {
+                    smax = m.s;
+                    wmax = m.w;
+                    xmax = m.x;
+                }
+            }
             if (first_step)
             {
                 smax0      = smax;

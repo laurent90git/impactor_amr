@@ -46,6 +46,7 @@ int main(int argc, char* argv[])
     app.add_option("--adapt-eps", opt.mr_eps, "multiresolution threshold")->capture_default_str();
     app.add_option("--adapt-reg", opt.mr_reg, "multiresolution regularity")->capture_default_str();
     app.add_option("--axis", opt.axis, "direction of the 1D cases")->capture_default_str();
+    app.add_option("--base", opt.base, "cell size at level 0 [m] (default: the case's; must divide the domain lengths)");
     app.add_option("--out", opt.out_dir, "output directory")->capture_default_str();
     app.add_option("--tag", opt.tag, "suffix of the output files");
     app.add_option("--log-every", opt.log_every, "log period in steps")->capture_default_str();

@@ -175,10 +175,10 @@ namespace hvi
         {
             // 3D analogue of impact2009 (elastic) / impact2012 (plastic): a cylindrical projectile (axis x, diameter and
             // length 0.1 m, 800 m/s) against a circular (diameter 0.5 m) or square (0.5 m x 0.5 m) plate 0.1 m thick.
-            // Domain 0.6 m cubed (use with hvi3d).
+            // Domain 0.8 m cubed (use with hvi3d; refined zones must stay away from the domain edges in 3D).
             c.one_d = false;
             c.lo    = {0., 0., 0.};
-            c.hi    = {0.6, 0.6, 0.6};
+            c.hi    = {0.8, 0.8, 0.8};
             c.eps   = 1e-4;
             c.level = 2;
             c.tf    = 300e-6;
@@ -192,8 +192,8 @@ namespace hvi
             }
             c.point = [=](const Vec3& x)
             {
-                const double r2   = sq(x[1] - 0.3) + sq(x[2] - 0.3); // axis of the projectile: y = z = 0.3
-                const bool across = square ? (std::abs(x[1] - 0.3) < 0.25 && std::abs(x[2] - 0.3) < 0.25) : r2 < 0.25 * 0.25;
+                const double r2   = sq(x[1] - 0.4) + sq(x[2] - 0.4); // axis of the projectile: y = z = 0.4
+                const bool across = square ? (std::abs(x[1] - 0.4) < 0.25 && std::abs(x[2] - 0.4) < 0.25) : r2 < 0.25 * 0.25;
                 const bool plate  = x[0] > 0.2 && x[0] < 0.3 && across;
                 const bool proj   = x[0] > 0.1 - gap && x[0] <= 0.2 - gap && r2 < 0.05 * 0.05;
                 return PointState{(plate || proj) ? 0u : 1u, Vec3{proj ? 800. : 0., 0., 0.}, 1e5};

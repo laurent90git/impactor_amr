@@ -1,6 +1,12 @@
-Preview of the first 40 µs (the run was paused at about 80 µs). Panels: density, total solid fraction, von Mises
-stress, AMR level. The iron disc mushrooms as it drives into the aluminium plate, the back face bulges and the
-aluminium splashes back along the disc.
+Level 4 (finest cell 0.31 mm), 0 to 100 µs. The iron disc mushrooms, drives through the aluminium plate (aluminium
+splashes back along it), perforates it at about 60 µs, and leaves the domain through the right boundary (the domain
+size is not given in the paper; the one used here is too narrow to follow the disc). The plate keeps a hole with
+petals bent in the direction of the impact.
 
-.. image:: _static/gif/penetration2015_preview.gif
+.. figure:: _static/fig/impacts_N_rho.png
+   :width: 100%
+
+   Mixture density at 25, 50, 75 and 100 µs (colour scale per panel).
+
+.. image:: _static/gif/penetration2015.gif
    :width: 100%

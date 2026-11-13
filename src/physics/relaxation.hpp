@@ -1,6 +1,6 @@
 // Cell-local relaxation step, applied after each stage of the hyperbolic update (and after mesh adaptation):
-//   1. sanitise: volume fractions clipped and normalised; vacuum guard (density floor, velocity cap; counted in
-//      `vacuum`: these cells do not conserve mass and energy);
+//   1. sanitise: volume fractions clipped and normalised; vacuum guard (density floor, velocity cap, drained stiff
+//      phases emptied; counted in `vacuum`: these cells do not conserve mass and energy);
 //   2. slip policy: where chi = 0, each solid cobasis is reset (slip.hpp); same reset where the elastic strain is
 //      extreme, tr(g) > max_trg (local failure, counted in `failed`);
 //   3. plasticity: each solid cobasis relaxed to the yield surface (plasticity.hpp);
@@ -44,6 +44,7 @@ namespace hvi
         double rho_floor  = 1e-3; ///< step 1b: density floor [kg/m3]
         double v_cap      = 2e4;  ///< step 1b: velocity cap [m/s]
         double max_trg    = 50.;  ///< step 2: failure where tr(g) exceeds this (principal stretch about 7)
+        double drained_fraction = 1e-3; ///< step 1b: a stiff phase below this fraction of rho0 is emptied
 
         /// u: the conservative state of one cell (any indexable type)
         template <class C>
@@ -79,16 +80,34 @@ namespace hvi
                 {
                     v2 += sq(u[L::mom(i)] / rho);
                 }
-                if (rho < rho_floor || v2 > v_cap * v_cap)
+                std::size_t lg = 0; // lightest phase: lowest p_inf
+                for (std::size_t l = 1; l < N; ++l)
                 {
-                    std::size_t lg = 0; // lightest phase: lowest p_inf
-                    for (std::size_t l = 1; l < N; ++l)
+                    if (mat[l].pinf < mat[lg].pinf)
                     {
-                        if (mat[l].pinf < mat[lg].pinf)
-                        {
-                            lg = l;
-                        }
+                        lg = l;
                     }
+                }
+                // a stiff phase drained far below its reference density while keeping its volume fraction (its
+                // stiffened-gas sound speed then diverges): its volume goes to the lightest phase
+                bool drained = false;
+                for (std::size_t l = 0; l < N; ++l)
+                {
+                    if (l != lg && mat[l].pinf > mat[lg].pinf && al[l] > 10. * model.alpha_min
+                        && u[L::arho(l)] / al[l] < drained_fraction * mat[l].rho0)
+                    {
+                        al[lg] += al[l] - model.alpha_min;
+                        al[l]          = model.alpha_min;
+                        u[L::alpha(l)] = al[l];
+                        drained        = true;
+                    }
+                }
+                if (drained)
+                {
+                    u[L::alpha(lg)] = al[lg];
+                }
+                if (drained || rho < rho_floor || v2 > v_cap * v_cap)
+                {
                     if (rho < rho_floor)
                     {
                         u[L::arho(lg)] += rho_floor - rho;

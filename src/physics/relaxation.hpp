@@ -1,7 +1,8 @@
 // Cell-local relaxation step, applied after each stage of the hyperbolic update (and after mesh adaptation):
 //   1. sanitise: volume fractions clipped and normalised; vacuum guard (density floor, velocity cap; counted in
 //      `vacuum`: these cells do not conserve mass and energy);
-//   2. slip policy: where chi = 0, each solid cobasis is reset (slip.hpp);
+//   2. slip policy: where chi = 0, each solid cobasis is reset (slip.hpp); same reset where the elastic strain is
+//      extreme, tr(g) > max_trg (local failure, counted in `failed`);
 //   3. plasticity: each solid cobasis relaxed to the yield surface (plasticity.hpp);
 //   4. instantaneous pressure relaxation (Saurel et al. 2009 sec. 3.3, Ndanou 2015 sec. 5.3): solve for p
 //        f(p) = sum_l alpha_l (p0_l + gamma_l pinf_l + (gamma_l - 1) p) / (gamma_l (p + pinf_l)) - 1 = 0
@@ -28,6 +29,7 @@ namespace hvi
         std::size_t yielded = 0; ///< solid cobases relaxed to the yield surface
         std::size_t voided  = 0; ///< cells where a void was opened to keep the energy (see step 5)
         std::size_t vacuum  = 0; ///< cells refilled by the vacuum guard (step 1b; mass and energy not conserved)
+        std::size_t failed  = 0; ///< solid cobases reset because of an extreme strain (step 2)
     };
 
     template <class Model, class Plasticity = VonMisesInstantaneous<typename Model::ShearEnergy>>
@@ -41,6 +43,7 @@ namespace hvi
         bool void_opening = true; ///< step 5: open a void rather than inject energy where the pressure is inadmissible
         double rho_floor  = 1e-3; ///< step 1b: density floor [kg/m3]
         double v_cap      = 2e4;  ///< step 1b: velocity cap [m/s]
+        double max_trg    = 50.;  ///< step 2: failure where tr(g) exceeds this (principal stretch about 7)
 
         /// u: the conservative state of one cell (any indexable type)
         template <class C>
@@ -148,6 +151,12 @@ namespace hvi
                 if (chi0[s] == 0.)
                 {
                     model.slip.reset(A);
+                }
+                else if (!(trace(Model::ShearEnergy::evaluate(A).g) < max_trg))
+                {
+                    // extreme (or degenerate) elastic strain: local failure, the elastic state is reset
+                    model.slip.reset(A);
+                    ++stats.failed;
                 }
                 else if (plastic && plasticity(A, mat[s], u[L::arho(s)] / al[s]))
                 {

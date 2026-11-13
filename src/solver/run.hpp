@@ -403,6 +403,7 @@ namespace hvi
                 stats.floored += s.floored;
                 stats.voided += s.voided;
                 stats.vacuum += s.vacuum;
+                stats.failed += s.failed;
             }
             double smax = 0.;
             bool finite = true;
@@ -472,6 +473,7 @@ namespace hvi
                 st.yielded += s1.yielded;
                 st.voided += s1.voided;
                 st.vacuum += s1.vacuum;
+                st.failed += s1.failed;
             }
             samurai::swap(U, Unp1);
             t += dt;
@@ -479,14 +481,16 @@ namespace hvi
             stats.floored += st.floored;
             stats.voided += st.voided;
             stats.vacuum += st.vacuum;
+            stats.failed += st.failed;
             stats.yielded = st.yielded;
             const bool is_out = next_out < out_times.size() && t >= out_times[next_out] * (1. - 1e-12);
             if (nt % opt.log_every == 0 || is_out || nt == 1)
             {
                 const auto s     = diagnostics(nt, t, dt, stats);
                 const double wct = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall0).count();
-                std::cout << fmt::format("step {:7d} t = {:.4e} dt = {:.3e} cells {:8d} floored {:6d} voided {:7d} vacuum {:5d} yielded {:6d}  ({:.0f} s)",
-                                         nt, t, dt, mesh.nb_cells(mesh_id_t::cells), stats.floored, stats.voided, stats.vacuum, st.yielded, wct)
+                std::cout << fmt::format("step {:7d} t = {:.4e} dt = {:.3e} cells {:8d} floored {:6d} voided {:7d} vacuum {:5d} failed {:6d} yielded {:6d}  ({:.0f} s)",
+                                         nt, t, dt, mesh.nb_cells(mesh_id_t::cells), stats.floored, stats.voided, stats.vacuum, stats.failed,
+                                         st.yielded, wct)
                           << std::endl;
                 log.flush();
             }

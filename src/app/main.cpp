@@ -50,6 +50,9 @@ int main(int argc, char* argv[])
     app.add_option("--tag", opt.tag, "suffix of the output files");
     app.add_option("--log-every", opt.log_every, "log period in steps")->capture_default_str();
     app.add_option("--max-steps", opt.max_steps, "maximum number of steps");
+    app.add_option("--checkpoint-every", opt.checkpoint_every, "wall seconds between checkpoints (0: only on SIGTERM / Ctrl-C)")
+        ->capture_default_str();
+    app.add_option("--resume", opt.resume, "resume from a checkpoint prefix, e.g. out/impact2009_A_ckpt (same options otherwise)");
     SAMURAI_PARSE(argc, argv);
 
     if (opt.axis >= dim)

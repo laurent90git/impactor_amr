@@ -43,6 +43,19 @@ Main options (``--help`` for all):
 ``--out``, ``--tag``       output directory and file suffix
 =========================  ===========================================================================
 
+Checkpoint and restart (samurai's HDF5 ``dump`` / ``load`` of the adapted mesh and the fields, plus the state of the
+time loop):
+
+.. code-block:: bash
+
+   # a checkpoint every 15 min of wall time (default), and on SIGTERM / Ctrl-C (then the run stops cleanly)
+   ./build/hvi2d --case impact2009 --level 5 --coarse-level 2 --paper-times --tag A --checkpoint-every 900
+   kill -TERM <pid>            # -> out/impact2009_A_ckpt.h5 + .state
+   # continue, with the same options plus --resume; outputs and log continue where they stopped
+   ./build/hvi2d --case impact2009 --level 5 --coarse-level 2 --paper-times --tag A --resume out/impact2009_A_ckpt
+
+A resumed run is bitwise identical to an uninterrupted one (checked in 1D and 2D, adapted meshes).
+
 Outputs, in ``<out>/<case>[_<tag>]``:
 
 - ``_NNN.npy``: one row per cell, columns listed in ``_columns.txt`` (centre, size, level, density, solid fraction,

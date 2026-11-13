@@ -28,3 +28,10 @@ Resume point for any restart: read this file, then DEVELOPMENT_PLAN.md.
 - Fix: relaxation step 5 opens a void (compacts the stiff phases, gas fills) instead of injecting energy (`voided`
   counter). Also: slip switch per solid phase (needed with 2 solids). 1D results unchanged.
 - Runs A and C (old binary in build/) continue; B and 2012 re-run with build-dev/hvi2d into out/dbg.
+
+## Morning 2026-11-13
+- Restart capability: `--checkpoint-every <s>` (default 900), checkpoint + clean stop on SIGTERM/Ctrl-C, `--resume <prefix>_ckpt`.
+  Bitwise identical to uninterrupted runs (1D and 2D, adaptive). Binaries bin/hvi*_v5.
+- PAUSED (SIGSTOP) at the user's request: pid 149004 (impact2012 P4 level 5, ~612/1100 us) and 151651 + wrapper 151650
+  (penetration2015 GIF run, ~80/100 us). These are v4 binaries without checkpoints: resume with
+  `kill -CONT 149004 151650 151651`.

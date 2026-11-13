@@ -6,8 +6,10 @@
 // with L the hyperbolic operator (flux_operator.hpp) and R the cell relaxation (physics/relaxation.hpp).
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -20,6 +22,7 @@
 #include <samurai/mr/mesh.hpp>
 #include <samurai/samurai.hpp>
 #include <samurai/schemes/fv.hpp>
+#include <samurai/io/restart.hpp> // after the xtensor headers (H5Easy support of xtensor)
 
 #include "../cases/cases.hpp"
 #include "../io/npy.hpp"
@@ -50,6 +53,49 @@ namespace hvi
         std::size_t axis      = 0;     ///< direction of the 1D cases
         std::size_t log_every = 100;
         std::size_t max_steps = 100000000;
+        double checkpoint_every = 900.;  ///< wall seconds between checkpoints (<= 0: none, except on SIGTERM/SIGINT)
+        std::string resume;              ///< checkpoint prefix to resume from (<out>/<case>[_<tag>]_ckpt)
+    };
+
+    /// set by SIGTERM / SIGINT: the time loop writes a checkpoint and stops
+    inline std::atomic<bool>& stop_requested()
+    {
+        static std::atomic<bool> flag{false};
+        return flag;
+    }
+
+    inline void install_stop_handlers()
+    {
+        auto handler = [](int) { stop_requested() = true; };
+        std::signal(SIGTERM, handler);
+        std::signal(SIGINT, handler);
+    }
+
+    /// state of the time loop saved next to the samurai checkpoint (mesh + fields, HDF5)
+    struct LoopState
+    {
+        double t = 0.;
+        std::size_t nt = 0, next_out = 0, iout = 0;
+
+        void write(const std::string& path) const
+        {
+            const std::string tmp = path + ".tmp";
+            {
+                std::ofstream f(tmp);
+                f.precision(17);
+                f << t << " " << nt << " " << next_out << " " << iout << "\n";
+            }
+            std::filesystem::rename(tmp, path);
+        }
+
+        void read(const std::string& path)
+        {
+            std::ifstream f(path);
+            if (!(f >> t >> nt >> next_out >> iout))
+            {
+                throw std::runtime_error("cannot read the checkpoint state " + path);
+            }
+        }
     };
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -282,23 +328,43 @@ namespace hvi
             Unp1.resize();
         };
 
-        // ---- initial condition ----------------------------------------------------------------------------------------
-        initialise<dim>(U, model, cd, eps);
-        if (adaptive)
+        // ---- initial condition, or state of a checkpoint ----------------------------------------------------------
+        LoopState loop;
+        if (!opt.resume.empty())
         {
-            for (std::size_t k = lmin; k <= level; ++k)
-            {
-                adapt();
-                initialise<dim>(U, model, cd, eps); // exact values on the adapted mesh
-            }
+            const std::filesystem::path rp(opt.resume);
+            samurai::load(rp.parent_path(), rp.filename().string(), mesh, U); // adapted mesh and state
+            U1.resize();
+            Unp1.resize();
+            ind.resize();
+            loop.read(opt.resume + ".state");
+            std::cout << fmt::format("resume from {} at t = {:.6e} s, step {}, {} cells", opt.resume, loop.t, loop.nt,
+                                     mesh.nb_cells(mesh_id_t::cells))
+                      << std::endl;
         }
-        relax_all(U, model, relaxation);
+        else
+        {
+            initialise<dim>(U, model, cd, eps);
+            if (adaptive)
+            {
+                for (std::size_t k = lmin; k <= level; ++k)
+                {
+                    adapt();
+                    initialise<dim>(U, model, cd, eps); // exact values on the adapted mesh
+                }
+            }
+            relax_all(U, model, relaxation);
+        }
 
         // ---- outputs ----------------------------------------------------------------------------------------------------
         std::filesystem::create_directories(opt.out_dir);
         const std::string prefix = fmt::format("{}/{}{}", opt.out_dir, cd.name, opt.tag.empty() ? "" : "_" + opt.tag);
-        std::ofstream log(prefix + ".log");
-        log << "# step t dt cells mass_0..mass_N-1 momentum_0..2 energy floored yielded\n";
+        const bool resuming = !opt.resume.empty();
+        std::ofstream log(prefix + ".log", resuming ? std::ios::app : std::ios::trunc);
+        if (!resuming)
+        {
+            log << "# step t dt cells mass_0..mass_N-1 momentum_0..2 energy floored yielded\n";
+        }
         {
             std::ofstream hdr(prefix + "_columns.txt");
             hdr << "x y z h level rho alpha_solid u v w p s11 s22 s12 a21 chi vonmises s33 s13 s23\n";
@@ -310,7 +376,7 @@ namespace hvi
                                    model.mat[l].pinf, model.mat[l].mu, model.mat[l].rho0, model.mat[l].yield);
             }
         }
-        std::size_t iout = 0;
+        std::size_t iout = loop.iout;
         auto output      = [&](double t)
         {
             std::vector<double> a;
@@ -382,20 +448,44 @@ namespace hvi
 
         // ---- time loop ------------------------------------------------------------------------------------------------
         const double h  = mesh.min_cell_length();
-        double t        = 0.;
-        std::size_t nt = 0, next_out = 0;
+        double t        = loop.t;
+        std::size_t nt = loop.nt, next_out = loop.next_out;
         const auto wall0 = std::chrono::steady_clock::now();
         std::cout << fmt::format("case {} ({}D, N = {}, NS = {}): levels {}..{} (h = {:.4g} m), {} cells, tf = {:.4e} s", cd.name, dim, N,
                                  NS, lmin, level, h, mesh.nb_cells(mesh_id_t::cells), tf)
                   << std::endl;
-        if (!opt.paper_times && opt.nout > 1)
+        if (!opt.paper_times && opt.nout > 1 && !resuming)
         {
             output(0.);
         }
+        // checkpoint: samurai mesh + fields (HDF5) and loop state; each one replaces the previous
+        const std::string ckpt = prefix + "_ckpt";
+        auto checkpoint        = [&]()
+        {
+            samurai::dump(std::filesystem::path(opt.out_dir), std::filesystem::path(ckpt).filename().string() + "_tmp", mesh, U);
+            std::filesystem::rename(ckpt + "_tmp.h5", ckpt + ".h5");
+            LoopState{t, nt, next_out, iout}.write(ckpt + ".state");
+            std::cout << fmt::format("  checkpoint at t = {:.6e} s, step {} -> {}.h5", t, nt, ckpt) << std::endl;
+        };
+        install_stop_handlers();
+        auto last_ckpt = std::chrono::steady_clock::now();
         RelaxationStats stats;
-        double smax0 = 1.;
+        double smax0     = 1.;
+        bool first_step  = true;
         while (t < tf * (1. - 1e-12) && nt < opt.max_steps)
         {
+            if (stop_requested())
+            {
+                checkpoint();
+                std::cout << fmt::format("stopped by signal at t = {:.6e} s: resume with --resume {}", t, ckpt) << std::endl;
+                return 2;
+            }
+            if (opt.checkpoint_every > 0.
+                && std::chrono::duration<double>(std::chrono::steady_clock::now() - last_ckpt).count() > opt.checkpoint_every)
+            {
+                checkpoint();
+                last_ckpt = std::chrono::steady_clock::now();
+            }
             if (adaptive)
             {
                 adapt();
@@ -425,9 +515,10 @@ namespace hvi
                                            }
                                        }
                                    });
-            if (nt == 0)
+            if (first_step)
             {
-                smax0 = smax;
+                smax0      = smax;
+                first_step = false;
             }
             if (!finite || smax > 1e3 * smax0)
             {

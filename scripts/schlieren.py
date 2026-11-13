@@ -23,7 +23,8 @@ def apply_slice(a, spec):
     ax, val = spec.split("=")
     k = "xyz".index(ax)
     v = float(val)
-    m = (a[:, k] - 0.5 * a[:, 3] <= v) & (v < a[:, k] + 0.5 * a[:, 3])
+    tol = 1e-9 * a[:, 3]
+    m = (a[:, k] - 0.5 * a[:, 3] <= v + tol) & (v + tol < a[:, k] + 0.5 * a[:, 3])
     b = a[m].copy()
     keep = [i for i in range(3) if i != k]
     b[:, 0], b[:, 1] = a[m][:, keep[0]], a[m][:, keep[1]]

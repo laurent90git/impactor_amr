@@ -92,3 +92,37 @@ Three materials: iron disc (radius 1 cm, 1000 m/s), aluminium plate 2 cm x 16 cm
 finest cell 0.31 mm at level 4): see the animation below when available.
 
 .. include:: _static/fig/penetration_status.rst
+
+3D: cylindrical projectile on a disc or a square plate
+-------------------------------------------------------
+
+The same executable compiled for ``dim = 3`` (``hvi3d``): the dimension is a compile-time parameter, the physics is
+3D whatever the mesh. Cases ``impact3d-disc``, ``impact3d-square`` (elastic copper, :math:`\mu = 92` GPa) and
+``impact3d-disc-plastic`` (copper of Favrie 2012, 5 mm gap): a cylinder of diameter and length 0.1 m at 800 m/s
+against a plate 0.1 m thick, circular (diameter 0.5 m) or square (0.5 m x 0.5 m), domain 0.8 m cubed. Very coarse:
+multiresolution between levels 1 and 2, finest cell 12.5 mm (8 cells across the projectile), about 70 000 cells,
+10 minutes per run on one core (``scripts/run_3d.sh``). At this resolution the interfaces are very diffuse (the peak
+density of the projectile drops as it is smeared) and the four-fold imprint of the Cartesian grid is visible: these
+runs check the 3D code, they are not converged. Slices with ``--slice z=0.4`` in the plot scripts.
+
+.. figure:: _static/fig/impact3d_plate.png
+   :width: 100%
+
+   Density in the plate (plane x = 0.256 m) at t = 0 and 300 µs, disc and square plates.
+
+.. figure:: _static/fig/impact3d_disc_z.png
+   :width: 100%
+
+   Disc plate, density in the plane z = 0.4 m (projectile axis) at 0, 100, 200, 300 µs.
+
+.. image:: _static/gif/impact3d-disc.gif
+   :width: 100%
+
+.. image:: _static/gif/impact3d-square.gif
+   :width: 100%
+
+.. image:: _static/gif/impact3d-disc-plastic.gif
+   :width: 100%
+
+Note: in 3D, refined cells touching the domain edges made samurai's adaptation fail (interval query of a corner
+ghost); the 3D domain is therefore taken large enough that the refined zones stay away from the boundaries.

@@ -15,6 +15,21 @@ import numpy as np  # noqa: E402
 COL = {"rho": 5, "alpha": 6, "u": 7, "v": 8, "p": 10, "vonmises": 16, "level": 4, "chi": 15}
 
 
+def apply_slice(a, spec):
+    """3D outputs: keep the cells cut by the plane 'x=..', 'y=..' or 'z=..'; the two other coordinates become the
+    plotting axes (columns 0 and 1)."""
+    if not spec:
+        return a
+    ax, val = spec.split("=")
+    k = "xyz".index(ax)
+    v = float(val)
+    m = (a[:, k] - 0.5 * a[:, 3] <= v) & (v < a[:, k] + 0.5 * a[:, 3])
+    b = a[m].copy()
+    keep = [i for i in range(3) if i != k]
+    b[:, 0], b[:, 1] = a[m][:, keep[0]], a[m][:, keep[1]]
+    return b
+
+
 def raster(a, col):
     x, y, h = a[:, 0], a[:, 1], a[:, 3]
     hmin = h.min()
@@ -39,6 +54,7 @@ def main():
     ap.add_argument("-o", "--out", default="schlieren.png")
     ap.add_argument("--field", default="schlieren")
     ap.add_argument("--k", type=float, default=40.0)
+    ap.add_argument("--slice", default="", help="3D: plane to show, e.g. z=0.5")
     a = ap.parse_args()
 
     n = len(a.files)
@@ -46,7 +62,7 @@ def main():
     nrow = (n + ncol - 1) // ncol
     fig, axs = plt.subplots(nrow, ncol, figsize=(4.2 * ncol, 4.2 * nrow), squeeze=False)
     for ax, f in zip(axs.ravel(), a.files):
-        d = np.load(f)
+        d = apply_slice(np.load(f), a.slice)
         if a.field == "schlieren":
             img, ext = raster(d, COL["rho"])
             gy, gx = np.gradient(np.log(img))  # log: the air shocks are visible next to the copper/air jump

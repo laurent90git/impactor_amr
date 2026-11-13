@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
     hvi::RunOptions opt;
     app.add_option("--case", case_name,
                    "advect, slip-advect, shear-slab, double-expansion, solid-shear-tube, solid-gas-tube, impact1d, wilkins, "
-                   "impact2009, impact2012, penetration2015")
+                   "impact2009, impact2012, penetration2015 (2D); impact3d-disc, impact3d-square, impact3d-disc-plastic (3D)")
         ->capture_default_str();
     app.add_option("--level", opt.level, "finest level (default: the case's)");
     app.add_option("--coarse-level", opt.min_level, "coarsest level (< level: multiresolution adaptation)");

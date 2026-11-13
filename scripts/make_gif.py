@@ -21,7 +21,7 @@ import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(__file__))
-from schlieren import COL, raster  # noqa: E402
+from schlieren import COL, apply_slice, raster  # noqa: E402
 
 
 def frame_image(d, field, k, vlim):
@@ -44,6 +44,7 @@ def main():
     ap.add_argument("--tf", type=float, default=None, help="final time (frame k at k tf / nframes)")
     ap.add_argument("--fps", type=float, default=8.0)
     ap.add_argument("--title", default="")
+    ap.add_argument("--slice", default="", help="3D: plane to show, e.g. z=0.5")
     a = ap.parse_args()
 
     files = sorted(f for f in glob.glob(a.prefix + "_[0-9][0-9][0-9].npy"))
@@ -64,12 +65,12 @@ def main():
             continue
         lo, hi = np.inf, -np.inf
         for f in files[:: max(1, len(files) // 8)]:
-            v = np.load(f)[:, COL[fld]]
+            v = apply_slice(np.load(f), a.slice)[:, COL[fld]]
             lo, hi = min(lo, np.nanpercentile(v, 1)), max(hi, np.nanpercentile(v, 99))
         vlims[fld] = (lo, hi) if fld != "level" else (np.floor(lo), np.ceil(hi))
     frames = []
     for i, f in enumerate(files):
-        d = np.load(f)
+        d = apply_slice(np.load(f), a.slice)
         imgs = [frame_image(d, fld, a.k, vlims.get(fld)) for fld in fields]
         ext = imgs[0][1]
         aspect = (ext[3] - ext[2]) / (ext[1] - ext[0])

@@ -171,6 +171,34 @@ namespace hvi
                 return PointState{(plate || proj) ? 0u : 1u, Vec3{proj ? 800. : 0., 0., 0.}, 1e5};
             };
         }
+        else if (name == "impact3d-disc" || name == "impact3d-square" || name == "impact3d-disc-plastic")
+        {
+            // 3D analogue of impact2009 (elastic) / impact2012 (plastic): a cylindrical projectile (axis x, diameter and
+            // length 0.1 m, 800 m/s) against a circular (diameter 0.5 m) or square (0.5 m x 0.5 m) plate 0.1 m thick.
+            // Domain 0.6 m cubed (use with hvi3d).
+            c.one_d = false;
+            c.lo    = {0., 0., 0.};
+            c.hi    = {0.6, 0.6, 0.6};
+            c.eps   = 1e-4;
+            c.level = 2;
+            c.tf    = 300e-6;
+            const bool square  = name == "impact3d-square";
+            const bool plastic = name == "impact3d-disc-plastic";
+            const double gap   = plastic ? 0.005 : 0.;
+            if (plastic)
+            {
+                c.mat     = {copper_2012(), air()};
+                c.plastic = true;
+            }
+            c.point = [=](const Vec3& x)
+            {
+                const double r2   = sq(x[1] - 0.3) + sq(x[2] - 0.3); // axis of the projectile: y = z = 0.3
+                const bool across = square ? (std::abs(x[1] - 0.3) < 0.25 && std::abs(x[2] - 0.3) < 0.25) : r2 < 0.25 * 0.25;
+                const bool plate  = x[0] > 0.2 && x[0] < 0.3 && across;
+                const bool proj   = x[0] > 0.1 - gap && x[0] <= 0.2 - gap && r2 < 0.05 * 0.05;
+                return PointState{(plate || proj) ? 0u : 1u, Vec3{proj ? 800. : 0., 0., 0.}, 1e5};
+            };
+        }
         else if (name == "impact2012") // Favrie & Gavrilyuk 2012 sec. 6.2, elastic-plastic, narrow gap (positions assumed)
         {
             c.one_d    = false;

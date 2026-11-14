@@ -133,3 +133,24 @@ runs check the 3D code, they are not converged. Slices with ``--slice z=0.4`` in
 
 Note: in 3D, refined cells touching the domain edges made samurai's adaptation fail (interval query of a corner
 ghost); the 3D domain is therefore taken large enough that the refined zones stay away from the boundaries.
+
+Larger 3D run (about 1M cells, OpenMP)
+--------------------------------------
+
+``impact3d-disc-plastic`` with ``--base 0.04 --level 3 --coarse-level 1`` (finest cell 5 mm, 20 cells across the
+projectile), OpenMP build with 6 threads (``scripts/run_3d_big.sh``): 326 000 cells at the start, 907 000 at
+300 µs, 2 h 38 min, 0.55 GB. Unlike the 12.5 mm runs above, the projectile stays dense: it mushrooms into the plate,
+whose back face bulges, as in the 2D plastic case.
+
+.. figure:: _static/fig/impact3d_big_z.png
+   :width: 100%
+
+   Density in the plane z = 0.4 m (projectile axis) at 0, 100, 200, 300 µs.
+
+.. figure:: _static/fig/impact3d_big_x.png
+   :width: 100%
+
+   Density in the plate (plane x = 0.256 m) at the same times.
+
+.. image:: _static/gif/impact3d-big.gif
+   :width: 100%
